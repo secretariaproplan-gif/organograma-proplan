@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Organograma Interativo — PROPLAN/UFPE</title>
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<style>
+:root{--azul:#005ca9;--azul-escuro:#003b6f;--azul-medio:#1478bd;--cinza:#eef2f5;--borda:#aeb9c4;--texto:#263544}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient(135deg,#f4f7fa,#eef4f8,#f7f9fb);color:#374151}
+.header{background:linear-gradient(135deg,var(--azul-escuro),var(--azul));color:#fff;padding:22px 28px;box-shadow:0 4px 16px rgba(0,0,0,.12)}
+.header-content{max-width:1600px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.header-title{margin:0;font-size:clamp(20px,2vw,30px);font-weight:700}
+.header-subtitle{margin:6px 0 0;font-size:14px;opacity:.88}
+.header-badge{padding:8px 14px;border:1px solid rgba(255,255,255,.3);border-radius:20px;font-size:12px;background:rgba(255,255,255,.08)}
+.toolbar{max-width:1600px;margin:18px auto 0;padding:0 20px;display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.toolbar button{border:1px solid #d1d5db;background:#fff;color:var(--azul-escuro);padding:9px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:.2s}
+.toolbar button:hover{background:var(--azul);color:#fff;transform:translateY(-1px)}
+.toolbar-info{margin-left:auto;font-size:12px;color:#6b7280}
+.chart-wrapper{max-width:1600px;margin:14px auto 0;padding:0 20px 20px;position:relative}
+#network{width:100%;height:calc(100vh - 230px);min-height:620px;background:rgba(255,255,255,.92);border:1px solid rgba(209,213,219,.8);border-radius:16px;box-shadow:0 8px 24px rgba(0,55,100,.12);overflow:hidden}
+#tooltip{position:fixed;z-index:9999;width:290px;max-width:calc(100vw - 30px);padding:15px;background:rgba(255,255,255,.98);border:1px solid rgba(0,92,169,.18);border-left:4px solid var(--azul);border-radius:10px;box-shadow:0 12px 30px rgba(0,50,90,.2);pointer-events:none;opacity:0;transform:translateY(5px);transition:.15s}
+#tooltip.visible{opacity:1;transform:translateY(0)}
+.tooltip-title{color:var(--azul-escuro);font-weight:700;font-size:14px;line-height:1.3;margin-bottom:5px}
+.tooltip-code{color:var(--azul);font-weight:700;font-size:11px;margin-bottom:9px}
+.tooltip-description{color:#4b5563;font-size:12px;line-height:1.45}
+.legend{position:absolute;left:34px;bottom:34px;display:flex;gap:8px;padding:10px 12px;background:rgba(255,255,255,.94);border:1px solid #d1d5db;border-radius:9px;box-shadow:0 5px 16px rgba(0,0,0,.08);font-size:11px}
+.legend-item{display:flex;align-items:center;gap:6px}.legend-color{width:13px;height:13px;border-radius:3px;border:1px solid rgba(0,0,0,.1)}
+.legend-proplan{background:var(--azul-escuro)}.legend-nivel2{background:var(--azul)}.legend-nivel3{background:#e9eef3}
+.footer{max-width:1600px;margin:auto;padding:0 20px 16px;color:#6b7280;font-size:10px;text-align:right}
+@media(max-width:800px){.header{padding:18px}.header-content{align-items:flex-start;flex-direction:column}.header-badge{display:none}.toolbar{padding:0 12px}.toolbar-info{width:100%;margin-left:0}.chart-wrapper{padding:0 12px 12px}#network{min-height:580px;height:calc(100vh - 250px);border-radius:12px}.legend{left:20px;bottom:20px;max-width:calc(100% - 40px)}}
+</style>
+</head>
+<body>
+<header class="header">
+<div class="header-content">
+<div><h1 class="header-title">Pró-Reitoria de Planejamento Orçamentário e Finanças</h1><p class="header-subtitle">Organograma Interativo — PROPLAN/UFPE</p></div>
+<div class="header-badge">Estrutura Hierárquica</div>
+</div>
+</header>
+
+<div class="toolbar">
+<button id="btnExpandir">⊞ Expandir tudo</button>
+<button id="btnRecolher">⊟ Recolher tudo</button>
+<button id="btnCentralizar">⌖ Centralizar</button>
+<button id="btnZoomMais">＋ Zoom</button>
+<button id="btnZoomMenos">－ Zoom</button>
+<span class="toolbar-info">Clique em uma unidade para expandir ou recolher seus subníveis. Passe o mouse sobre uma unidade para visualizar informações.</span>
+</div>
+
+<main class="chart-wrapper">
+<div id="network"></div>
+<div class="legend">
+<div class="legend-item"><span class="legend-color legend-proplan"></span>PROPLAN</div>
+<div class="legend-item"><span class="legend-color legend-nivel2"></span>Nível 2</div>
+<div class="legend-item"><span class="legend-color legend-nivel3"></span>Nível 3</div>
+</div>
+</main>
+
+<footer class="footer">Estrutura organizacional baseada no Relatório de Estrutura Hierárquica da PROPLAN.</footer>
+
+<div id="tooltip">
+<div class="tooltip-title" id="tooltipTitle"></div>
+<div class="tooltip-code" id="tooltipCode"></div>
+<div class="tooltip-description" id="tooltipDescription"></div>
+</div>
+
+<script>
+const nodes=new vis.DataSet([
+{id:"PROPLAN",label:"Pró-Reitoria de Planejamento\\nOrçamentário e Finanças\\nPROPLAN-UFPE",level:0,group:"proplan",title:"Pró-Reitoria de Planejamento Orçamentário e Finanças",description:"Unidade responsável pela gestão e pelo controle orçamentário, financeiro e contábil da UFPE."},
+
+{id:"CGPROPLAN",label:"Contadoria Geral\\nCGPROPLAN",level:1,group:"nivel2",title:"Contadoria Geral",description:"Unidade responsável pelo acompanhamento da conformidade e das informações contábeis institucionais."},
+{id:"CAGE",label:"Coordenação de Apoio à Gestão\\nCAGE-PROPLAN",level:1,group:"nivel2",title:"Coordenação de Apoio à Gestão",description:"Unidade de apoio às atividades administrativas, orçamentárias e financeiras da PROPLAN."},
+{id:"CCRG",label:"Coordenação de Conformidade\\ndos Registros de Gestão\\nCCRG-PROPLAN",level:1,group:"nivel2",title:"Coordenação de Conformidade dos Registros de Gestão",description:"Unidade responsável pela certificação e análise dos registros de execução orçamentária, financeira e patrimonial."},
+
+{id:"DCF",label:"Diretoria de Contabilidade e Finanças\\nDCF-PROPLAN",level:1,group:"nivel2",title:"Diretoria de Contabilidade e Finanças",description:"Diretoria responsável pela execução, orientação e coordenação das áreas contábil, financeira e patrimonial."},
+{id:"CAC",label:"Coordenação de Análises Contábeis\\nCAC-PROPLAN",level:2,group:"nivel3",title:"Coordenação de Análises Contábeis",description:"Unidade dedicada às análises contábeis, acompanhamento de contas e suporte técnico à Diretoria."},
+{id:"CEOP",label:"Coordenação de Execução\\ndo Orçamento de Pessoal\\nCEOP-PROPLAN",level:2,group:"nivel3",title:"Coordenação de Execução do Orçamento de Pessoal",description:"Unidade responsável pelo acompanhamento e pela execução orçamentária e financeira das despesas de pessoal."},
+{id:"DDP",label:"Divisão de Diárias e Passagens\\nDDP-PROPLAN",level:3,group:"nivel3",title:"Divisão de Diárias e Passagens",description:"Unidade responsável pela análise e acompanhamento de diárias, passagens e respectivas prestações de contas."},
+{id:"CAPAG",label:"Coordenação de Análise e Pagamento\\nCAPAG-PROPLAN",level:2,group:"nivel3",title:"Coordenação de Análise e Pagamento",description:"Unidade responsável pela análise dos processos de pagamento, liquidação e emissão das ordens de pagamento."},
+{id:"DCC",label:"Divisão de Caixa Central\\nDCC-PROPLAN",level:3,group:"nivel3",title:"Divisão de Caixa Central",description:"Unidade responsável pela conferência de valores, disponibilidades de caixa e movimentações financeiras."},
+{id:"DEF",label:"Divisão de Escrituração Fiscal\\nDEF-PROPLAN",level:3,group:"nivel3",title:"Divisão de Escrituração Fiscal",description:"Unidade responsável pela escrituração fiscal e pelo acompanhamento das obrigações fiscais da Diretoria."},
+{id:"CRC",label:"Coordenação de Registros Contábeis\\nCRC-PROPLAN",level:2,group:"nivel3",title:"Coordenação de Registros Contábeis",description:"Unidade responsável pelos registros, regularizações e controles contábeis."},
+{id:"DSF",label:"Divisão de Suprimento de Fundos\\nDSF-PROPLAN",level:3,group:"nivel3",title:"Divisão de Suprimento de Fundos",description:"Unidade responsável pela análise e pelo encaminhamento de concessões e prestações de contas de suprimento de fundos."},
+
+{id:"DCCAC",label:"Diretoria de Convênios e Contratos Acadêmicos\\nDCCAc-PROPLAN",level:1,group:"nivel2",title:"Diretoria de Convênios e Contratos Acadêmicos",description:"Diretoria dedicada à formalização, acompanhamento e prestação de contas de instrumentos acadêmicos."},
+{id:"CA",label:"Coordenação de Acompanhamento\\nCA-PROPLAN",level:2,group:"nivel3",title:"Coordenação de Acompanhamento",description:"Unidade responsável pelo acompanhamento da execução orçamentária e financeira dos instrumentos sob sua competência."},
+{id:"CFI",label:"Coordenação de Formalização\\nCFI-PROPLAN",level:2,group:"nivel3",title:"Coordenação de Formalização",description:"Unidade responsável pela coordenação e uniformização dos procedimentos de formalização dos instrumentos."},
+{id:"DTED",label:"Divisão de Termos de Execução\\nDescentralizada\\nDTED-PROPLAN",level:3,group:"nivel3",title:"Divisão de Termos de Execução Descentralizada",description:"Unidade responsável pela análise e formalização de termos de execução descentralizada."},
+{id:"DCA",label:"Divisão de Contratos Acadêmicos\\nDCA-PROPLAN",level:3,group:"nivel3",title:"Divisão de Contratos Acadêmicos",description:"Unidade responsável pela análise e formalização de contratos acadêmicos."},
+{id:"DCC_CONVENIOS",label:"Divisão de Convênios e Congêneres\\nDCC-PROPLAN",level:3,group:"nivel3",title:"Divisão de Convênios e Congêneres",description:"Unidade responsável pela análise e formalização de convênios e instrumentos congêneres."},
+{id:"CPC",label:"Coordenação de Prestação de Contas\\nCPC-PROPLAN",level:2,group:"nivel3",title:"Coordenação de Prestação de Contas",description:"Unidade responsável pelo acompanhamento e análise das prestações de contas dos instrumentos."},
+
+{id:"DORC",label:"Diretoria de Orçamento\\nDORC-PROPLAN",level:1,group:"nivel2",title:"Diretoria de Orçamento",description:"Diretoria responsável pela programação e pelo monitoramento do orçamento da UFPE."},
+{id:"CEO",label:"Coordenação de Execução Orçamentária\\nCEO-PROPLAN",level:2,group:"nivel3",title:"Coordenação de Execução Orçamentária",description:"Unidade responsável pela descentralização, acompanhamento e execução dos créditos orçamentários."},
+{id:"CMO",label:"Coordenação de Monitoramento Orçamentário\\nCMO-PROPLAN",level:2,group:"nivel3",title:"Coordenação de Monitoramento Orçamentário",description:"Unidade responsável pelo monitoramento das reservas e solicitações de créditos orçamentários."},
+{id:"CPO",label:"Coordenação de Programação Orçamentária\\nCPO-PROPLAN",level:2,group:"nivel3",title:"Coordenação de Programação Orçamentária",description:"Unidade responsável pela consolidação da proposta orçamentária e pelo tratamento das informações orçamentárias."},
+{id:"GERO",label:"Gerência de Estimativa de Receita Orçamentária\\nGERO-PROPLAN",level:3,group:"nivel3",title:"Gerência de Estimativa de Receita Orçamentária",description:"Unidade responsável pelo apoio técnico às estimativas e reestimativas de receitas próprias."}
+]);
+
+const edges=new vis.DataSet([
+{from:"PROPLAN",to:"CGPROPLAN"},{from:"PROPLAN",to:"CAGE"},{from:"PROPLAN",to:"CCRG"},{from:"PROPLAN",to:"DCF"},{from:"PROPLAN",to:"DCCAC"},{from:"PROPLAN",to:"DORC"},
+{from:"DCF",to:"CAC"},{from:"DCF",to:"CEOP"},{from:"CEOP",to:"DDP"},{from:"DCF",to:"CAPAG"},{from:"CAPAG",to:"DCC"},{from:"CAPAG",to:"DEF"},{from:"DCF",to:"CRC"},{from:"CRC",to:"DSF"},
+{from:"DCCAC",to:"CA"},{from:"DCCAC",to:"CFI"},{from:"CFI",to:"DTED"},{from:"CFI",to:"DCA"},{from:"CFI",to:"DCC_CONVENIOS"},{from:"DCCAC",to:"CPC"},
+{from:"DORC",to:"CEO"},{from:"DORC",to:"CMO"},{from:"DORC",to:"CPO"},{from:"CPO",to:"GERO"}
+]);
+
+const groups={
+proplan:{shape:"box",color:{background:"#003b6f",border:"#002d55",highlight:{background:"#005ca9",border:"#003b6f"},hover:{background:"#005ca9",border:"#003b6f"}},font:{color:"#fff",size:18,face:"Segoe UI"},borderWidth:2,margin:{top:15,right:22,bottom:15,left:22}},
+nivel2:{shape:"box",color:{background:"#005ca9",border:"#00497f",highlight:{background:"#1478bd",border:"#003b6f"},hover:{background:"#1478bd",border:"#003b6f"}},font:{color:"#fff",size:15,face:"Segoe UI"},borderWidth:2,margin:15},
+nivel3:{shape:"box",color:{background:"#eef2f5",border:"#aeb9c4",highlight:{background:"#e1edf6",border:"#005ca9"},hover:{background:"#e1edf6",border:"#005ca9"}},font:{color:"#263544",size:13,face:"Segoe UI"},borderWidth:1.5,margin:13}
+};
+
+const network=new vis.Network(document.getElementById("network"),{nodes,edges},{
+layout:{hierarchical:{enabled:true,direction:"UD",sortMethod:"directed",levelSeparation:100,nodeSpacing:190,treeSpacing:230,blockShifting:true,edgeMinimization:true,parentCentralization:true}},
+physics:{enabled:false},
+interaction:{hover:true,hoverConnectedEdges:false,dragNodes:false,keyboard:{enabled:true},zoomView:true,dragView:true,tooltipDelay:0},
+nodes:{shape:"box",shadow:{enabled:true,color:"rgba(0,55,100,.15)",size:8,x:0,y:4},widthConstraint:{maximum:230,minimum:150},shapeProperties:{borderRadius:9}},
+edges:{arrows:{to:{enabled:false}},color:{color:"#8da0b2",highlight:"#005ca9",hover:"#005ca9"},width:1.5,smooth:{enabled:true,type:"cubicBezier",forceDirection:"vertical",roundness:.45}},
+groups
+});
+
+const collapsed=new Set();
+function isHidden(id){
+let current=id;
+while(true){
+const p=edges.get({filter:e=>e.to===current});
+if(!p.length)return false;
+current=p[0].from;
+if(collapsed.has(current))return true;
+}
+}
+function updateVisibility(){
+nodes.update(nodes.getIds().map(id=>({id,hidden:isHidden(id)})));
+edges.update(edges.getIds().map(id=>{const e=edges.get(id);return{id,hidden:isHidden(e.from)||isHidden(e.to)}}));
+network.fit({animation:{duration:400,easingFunction:"easeInOutQuad"}});
+}
+network.on("click",p=>{
+if(!p.nodes.length)return;
+const id=p.nodes[0];
+if(!edges.get({filter:e=>e.from===id}).length)return;
+collapsed.has(id)?collapsed.delete(id):collapsed.add(id);
+updateVisibility();
+});
+
+const tooltip=document.getElementById("tooltip");
+network.on("hoverNode",p=>{
+const n=nodes.get(p.node);
+if(!n)return;
+document.getElementById("tooltipTitle").textContent=n.title||"Unidade organizacional";
+document.getElementById("tooltipCode").textContent=(n.label.split("\n").filter(x=>x.includes("-PROPLAN")||x.includes("PROPLAN-UFPE")).join(""));
+document.getElementById("tooltipDescription").textContent=n.description||"Descrição da unidade organizacional.";
+const e=p.event;
+let x=e.clientX+16,y=e.clientY+16,w=290,h=150;
+if(x+w>innerWidth)x=e.clientX-w-16;if(y+h>innerHeight)y=e.clientY-h-16;
+tooltip.style.left=Math.max(10,x)+"px";tooltip.style.top=Math.max(10,y)+"px";tooltip.classList.add("visible");
+});
+["blurNode","dragStart","zoom"].forEach(ev=>network.on(ev,()=>tooltip.classList.remove("visible")));
+
+document.getElementById("btnExpandir").onclick=()=>{collapsed.clear();updateVisibility()};
+document.getElementById("btnRecolher").onclick=()=>{
+collapsed.clear();
+nodes.forEach(n=>{if(n.id!=="PROPLAN"&&edges.get({filter:e=>e.from===n.id}).length)collapsed.add(n.id)});
+updateVisibility();
+};
+document.getElementById("btnCentralizar").onclick=()=>network.fit({animation:{duration:500,easingFunction:"easeInOutQuad"}});
+document.getElementById("btnZoomMais").onclick=()=>network.moveTo({scale:network.getScale()*1.2,animation:{duration:250}});
+document.getElementById("btnZoomMenos").onclick=()=>network.moveTo({scale:network.getScale()/1.2,animation:{duration:250}});
+window.addEventListener("load",()=>setTimeout(()=>network.fit({animation:{duration:600,easingFunction:"easeInOutQuad"}}),300));
+window.addEventListener("resize",()=>network.fit({animation:{duration:300,easingFunction:"easeInOutQuad"}}));
+</script>
+</body>
+</html>
